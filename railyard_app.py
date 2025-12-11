@@ -26,8 +26,8 @@ coordinates = {
     93: (3620 * SCALE_X, 1400), 94: (3550 * SCALE_X, 5000.0),
     95: (3200 * SCALE_X, 4700), 96: (3125 * SCALE_X, 4700),
     97: (3050 * SCALE_X, 4700), 98: (2800 * SCALE_X, 4900),
-    99: (2580 * SCALE_X, 4900), 100: (2966 * SCALE_X, 1300),
-    101: (2966 * SCALE_X, 1200), 102: (2163.05 * SCALE_X, 751.15),
+    99: (2580 * SCALE_X, 4900), 100: (2966 * SCALE_X, 1500),
+    101: (2966 * SCALE_X, 1350), 102: (2163.05 * SCALE_X, 751.15),
     112: (2520.80 * SCALE_X, 751.15), 114: (2650 * SCALE_X, 650),
     116: (2900 * SCALE_X, 500.0), 121: (3352.29 * SCALE_X, 751.15),
     123: (3223.09 * SCALE_X, 650), 125: (2966.45 * SCALE_X, 650),
@@ -66,15 +66,15 @@ curve_edges = {(129, 93): {'control_offset': (50, 40)}}
 # Mixed edges - adjusted control points to prevent overlap
 mixed_edges = {
     # Main line from 102 to 129 - sweeping curve to the right
-    (102, 129): {'straight_length': 500, 'control_offset': (200, -500), 'angle': np.radians(40), 'curve_first': False},
+    (102, 129): {'straight_length': 450, 'control_offset': (150, -350), 'angle': np.radians(35), 'curve_first': False},
     # Track 134 to 142 - curve going left
-    (134, 142): {'straight_length': 400, 'control_offset': (-300, 500), 'angle': np.radians(90), 'curve_first': False},
-    # Storage tracks 100, 101 - spread apart more
-    (131, 100): {'straight_length': 200, 'control_offset': (-400, -150), 'angle': np.radians(220), 'curve_first': False},
-    (131, 101): {'straight_length': 250, 'control_offset': (-450, -100), 'angle': np.radians(265), 'curve_first': False},
+    (134, 142): {'straight_length': 540, 'control_offset': (3, 720), 'angle': np.radians(90), 'curve_first': False},
+    # Storage tracks 100, 101 - spread apart with different angles
+    (131, 100): {'straight_length': 270, 'control_offset': (3, -360), 'angle': np.radians(225), 'curve_first': False},
+    (131, 101): {'straight_length': 360, 'control_offset': (3, -360), 'angle': np.radians(265), 'curve_first': False},
     # Coil loading tracks 98, 99 - spread apart to avoid overlap
-    (142, 98): {'straight_length': 500, 'control_offset': (-500, -200), 'angle': np.radians(90), 'curve_first': True},
-    (142, 99): {'straight_length': 650, 'control_offset': (-650, -150), 'angle': np.radians(90), 'curve_first': True},
+    (142, 98): {'straight_length': 810, 'control_offset': (3, -540), 'angle': np.radians(90), 'curve_first': True},
+    (142, 99): {'straight_length': 1080, 'control_offset': (3, -540), 'angle': np.radians(90), 'curve_first': True},
 }
 
 # Train configurations with emoji icons
