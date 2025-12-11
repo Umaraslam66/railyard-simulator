@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Railway Shunting - Infrastructure & Traffic Simulation</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Railway Shunting Yard</h1>
+        </header>
+
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <div class="control-section">
+                <div class="controls">
+                    <button id="playBtn" class="btn btn-primary">▶ Start</button>
+                    <button id="pauseBtn" class="btn btn-secondary">⏸ Pause</button>
+                    <button id="resetBtn" class="btn btn-tertiary">↻ Reset</button>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="slider-container">
+                    <label>Trains:</label>
+                    <input type="range" id="trafficDensity" min="1" max="10" value="5" class="slider">
+                    <span id="densityValue" class="value-display">5</span>
+                </div>
+            </div>
+
+            <div class="control-section">
+                <div class="slider-container">
+                    <label>Speed:</label>
+                    <input type="range" id="speedControl" min="0.5" max="3" step="0.5" value="1" class="slider">
+                    <span id="speedValue" class="value-display">1x</span>
+                </div>
+            </div>
+
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">Active:</span>
+                    <span id="activeTrains" class="stat-value">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Visualization -->
+        <div class="visualization-container">
+            <svg id="railyard" viewBox="-200 -500 4200 6400" preserveAspectRatio="xMidYMid meet">
+                <!-- Enhanced Defs -->
+                <defs>
+                    <!-- Gradient Grid Pattern -->
+                    <pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse">
+                        <path d="M 100 0 L 0 0 0 100" fill="none" stroke="#d0d0d0" stroke-width="0.5"/>
+                        <circle cx="0" cy="0" r="1.5" fill="#bbb"/>
+                    </pattern>
+                    
+                    <!-- Large Grid Pattern -->
+                    <pattern id="largeGrid" width="500" height="500" patternUnits="userSpaceOnUse">
+                        <rect width="500" height="500" fill="url(#grid)"/>
+                        <path d="M 500 0 L 0 0 0 500" fill="none" stroke="#999" stroke-width="1.5"/>
+                    </pattern>
+                    
+                    <!-- Metallic gradient for tracks -->
+                    <linearGradient id="trackGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" style="stop-color:#2c3e50;stop-opacity:1" />
+                        <stop offset="50%" style="stop-color:#34495e;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#2c3e50;stop-opacity:1" />
+                    </linearGradient>
+                    
+                    <!-- Radial gradient for background -->
+                    <radialGradient id="bgGradient" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
+                        <stop offset="100%" style="stop-color:#f0f0f0;stop-opacity:1" />
+                    </radialGradient>
+                    
+                    <!-- Glow filter for elements -->
+                    <filter id="glow">
+                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                    
+                    <!-- Drop shadow filter -->
+                    <filter id="dropShadow" x="-50%" y="-50%" width="200%" height="200%">
+                        <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+                        <feOffset dx="2" dy="2" result="offsetblur"/>
+                        <feComponentTransfer>
+                            <feFuncA type="linear" slope="0.3"/>
+                        </feComponentTransfer>
+                        <feMerge>
+                            <feMergeNode/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                    
+                    <!-- Marker for switches -->
+                    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">
+                        <circle cx="5" cy="5" r="3" fill="#3498db"/>
+                    </marker>
+                </defs>
+
+                <!-- Enhanced Background with gradient and grid -->
+                <rect x="-200" y="-500" width="4200" height="6400" fill="url(#bgGradient)"/>
+                <rect x="-200" y="-500" width="4200" height="6400" fill="url(#largeGrid)" opacity="0.3"/>
+                
+                <!-- Decorative border -->
+                <rect x="-150" y="-450" width="4100" height="6500" fill="none" 
+                      stroke="#3498db" stroke-width="3" rx="20" opacity="0.3"/>
+                
+                <!-- Tracks will be drawn by JavaScript -->
+                <g id="tracks" filter="url(#dropShadow)"></g>
+                
+                <!-- Switches will be drawn by JavaScript -->
+                <g id="switches" filter="url(#dropShadow)"></g>
+                
+                <!-- Trains will be animated by JavaScript -->
+                <g id="trains" filter="url(#dropShadow)"></g>
+            </svg>
+        </div>
+
+
+    </div>
+
+    <script src="railyard-data.js?v=2"></script>
+    <script src="simulation.js?v=2"></script>
+</body>
+</html>
