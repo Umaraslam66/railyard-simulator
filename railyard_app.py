@@ -52,22 +52,29 @@ edges_with_lengths = [
     (131, 101, 535), (134, 142, 125), (142, 98, 1000), (142, 99, 1000),
 ]
 
+# Polyline edges - adjusted offsets for horizontal expansion
 polyline_edges = {
-    (13, 91): {'segments': 2, 'offset': -50 * SCALE_X},
-    (52, 90): {'segments': 2, 'offset': 240 * SCALE_X},
-    (114, 116): {'segments': 2, 'offset': 90 * SCALE_X},
-    (116, 123): {'segments': 2, 'offset': 90 * SCALE_X}
+    (13, 91): {'segments': 2, 'offset': -80},      # Reduced, curves upward
+    (52, 90): {'segments': 2, 'offset': 350},      # Wider arc for long track
+    (114, 116): {'segments': 2, 'offset': 120},    # Gentle curve
+    (116, 123): {'segments': 2, 'offset': 120}     # Match above
 }
 
-curve_edges = {(129, 93): {'control_offset': (1 * SCALE_X, 30)}}
+# Curve edges - gentle curve for loco lineup
+curve_edges = {(129, 93): {'control_offset': (50, 40)}}
 
+# Mixed edges - adjusted control points to prevent overlap
 mixed_edges = {
-    (102, 129): {'straight_length': 250 * SCALE_X, 'control_offset': (1.5 * SCALE_X, -400), 'angle': np.radians(35), 'curve_first': False},
-    (134, 142): {'straight_length': 300 * SCALE_X, 'control_offset': (1.5 * SCALE_X, 400), 'angle': np.radians(90), 'curve_first': False},
-    (131, 100): {'straight_length': 150 * SCALE_X, 'control_offset': (1.5 * SCALE_X, -200), 'angle': np.radians(225), 'curve_first': False},
-    (131, 101): {'straight_length': 200 * SCALE_X, 'control_offset': (1.5 * SCALE_X, -200), 'angle': np.radians(270), 'curve_first': False},
-    (142, 98): {'straight_length': 450 * SCALE_X, 'control_offset': (1.5 * SCALE_X, -300), 'angle': np.radians(90), 'curve_first': True},
-    (142, 99): {'straight_length': 600 * SCALE_X, 'control_offset': (1.5 * SCALE_X, -300), 'angle': np.radians(90), 'curve_first': True},
+    # Main line from 102 to 129 - sweeping curve to the right
+    (102, 129): {'straight_length': 500, 'control_offset': (200, -500), 'angle': np.radians(40), 'curve_first': False},
+    # Track 134 to 142 - curve going left
+    (134, 142): {'straight_length': 400, 'control_offset': (-300, 500), 'angle': np.radians(90), 'curve_first': False},
+    # Storage tracks 100, 101 - spread apart more
+    (131, 100): {'straight_length': 200, 'control_offset': (-400, -150), 'angle': np.radians(220), 'curve_first': False},
+    (131, 101): {'straight_length': 250, 'control_offset': (-450, -100), 'angle': np.radians(265), 'curve_first': False},
+    # Coil loading tracks 98, 99 - spread apart to avoid overlap
+    (142, 98): {'straight_length': 500, 'control_offset': (-500, -200), 'angle': np.radians(90), 'curve_first': True},
+    (142, 99): {'straight_length': 650, 'control_offset': (-650, -150), 'angle': np.radians(90), 'curve_first': True},
 }
 
 # Train configurations with emoji icons
