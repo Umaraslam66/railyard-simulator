@@ -8,7 +8,7 @@ import bisect
 import random
 from datetime import datetime
 
-# Initialize the Dash app with external stylesheets
+# Initialize the Dash app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 
 # --------------------------------------------------
@@ -71,19 +71,34 @@ mixed_edges = {
     (142, 99): {'straight_length': 600, 'control_offset': (1.5, -300), 'angle': np.radians(90), 'curve_first': True},
 }
 
-# Train colors for multiple trains
+# Train configurations - different colors and names
 TRAIN_COLORS = [
-    {'color': '#e74c3c', 'name': 'Red Express'},
-    {'color': '#3498db', 'name': 'Blue Line'},
-    {'color': '#2ecc71', 'name': 'Green Cargo'},
-    {'color': '#f39c12', 'name': 'Orange Freight'},
-    {'color': '#9b59b6', 'name': 'Purple Metro'},
+    {'color': '#e74c3c', 'name': 'Red Express', 'symbol': 'triangle-up'},
+    {'color': '#3498db', 'name': 'Blue Cargo', 'symbol': 'triangle-up'},
+    {'color': '#2ecc71', 'name': 'Green Freight', 'symbol': 'triangle-up'},
+    {'color': '#f39c12', 'name': 'Orange Line', 'symbol': 'triangle-up'},
+    {'color': '#9b59b6', 'name': 'Purple Metro', 'symbol': 'triangle-up'},
 ]
 
-# Default simulation routes
-DEFAULT_ROUTES = [
-    (11, 99), (16, 93), (11, 191), (16, 97), (11, 92),
+# Realistic train missions - entry point, destination, description
+# Each route uses DIFFERENT entry points to avoid collisions
+TRAIN_MISSIONS = [
+    {'entry': 11, 'dest': 98, 'desc': 'Coil Loading Track 7', 'load_time': 50},  # North entry -> Coil loading
+    {'entry': 16, 'dest': 99, 'desc': 'Coil Loading Track 8', 'load_time': 50},  # South entry -> Coil loading  
+    {'entry': 11, 'dest': 100, 'desc': 'Storage Track 102', 'load_time': 30},    # North entry -> Storage
+    {'entry': 16, 'dest': 101, 'desc': 'Storage Track 101', 'load_time': 30},    # South entry -> Storage
+    {'entry': 11, 'dest': 93, 'desc': 'Loco Lineup', 'load_time': 20},           # North entry -> Loco lineup
 ]
+
+# Track names for display
+TRACK_NAMES = {
+    98: 'Coil Loading #7', 99: 'Coil Loading #8',
+    100: 'Storage Track 102', 101: 'Storage Track 101',
+    93: 'Loco Lineup', 90: 'Maintenance Bay',
+    91: 'Sky Track 13', 92: 'End Track',
+    97: 'Future Track 103', 95: 'Track 5', 96: 'Track 6',
+    191: 'South Yard', 94: 'North Yard'
+}
 
 # --------------------------------------------------
 # Geometry Functions
@@ -233,10 +248,8 @@ railyard_graph = create_railyard_graph()
 # --------------------------------------------------
 
 def create_figure(trains=None, highlighted_switches=None, all_route_edges=None):
-    """Create figure with multiple train support."""
     fig = go.Figure()
     
-    # Colors
     polyline_color, curve_color, mixed_color = '#4a90d9', '#f5a623', '#7ed321'
     node_color, background_color = '#e8f4f8', '#1a1a2e'
     
@@ -244,10 +257,9 @@ def create_figure(trains=None, highlighted_switches=None, all_route_edges=None):
     all_route_edges = all_route_edges or []
     trains = trains or []
     
-    # Build route set
     route_edge_set = set()
     for edge in all_route_edges:
-        route_edge_set.add(tuple(edge))
+        route_edge_set.add(tuple(edge) if isinstance(edge, list) else edge)
         route_edge_set.add((edge[1], edge[0]))
     
     # Draw edges
@@ -297,17 +309,19 @@ def create_figure(trains=None, highlighted_switches=None, all_route_edges=None):
             hovertext=f"Switch {switch}", showlegend=False
         ))
     
-    # Draw trains
-    for i, train in enumerate(trains):
+    # Draw trains with rotation based on direction
+    for train in trains:
         if train.get('position'):
             tx, ty = train['position']
-            color_info = TRAIN_COLORS[i % len(TRAIN_COLORS)]
+            color_info = TRAIN_COLORS[train['id'] % len(TRAIN_COLORS)]
+            # Different symbol for loading state
+            symbol = 'square' if train.get('phase') == 'loading' else 'triangle-up'
+            size = 22 if train.get('phase') == 'loading' else 18
             fig.add_trace(go.Scatter(
                 x=[tx], y=[ty], mode='markers',
-                marker=dict(size=18, color=color_info['color'], symbol='triangle-up',
+                marker=dict(size=size, color=color_info['color'], symbol=symbol,
                            line=dict(width=2, color='white')),
-                name=color_info['name'], hoverinfo='text',
-                hovertext=f"{color_info['name']}", showlegend=False
+                hoverinfo='text', hovertext=f"{color_info['name']}", showlegend=False
             ))
     
     fig.update_layout(
@@ -315,8 +329,7 @@ def create_figure(trains=None, highlighted_switches=None, all_route_edges=None):
         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, scaleanchor='y', scaleratio=1),
         yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
         margin=dict(l=10, r=10, t=10, b=10),
-        uirevision='constant', showlegend=False,
-        height=900
+        uirevision='constant', showlegend=False, height=900
     )
     return fig
 
@@ -340,11 +353,9 @@ STYLES = {
         'background': 'linear-gradient(90deg, #3498db, #2ecc71)',
         'WebkitBackgroundClip': 'text', 'WebkitTextFillColor': 'transparent'
     },
-    'main': {
-        'display': 'flex', 'flex': '1', 'gap': '0', 'padding': '0'
-    },
+    'main': {'display': 'flex', 'flex': '1', 'gap': '0', 'padding': '0'},
     'leftPanel': {
-        'width': '280px', 'backgroundColor': '#16213e', 'padding': '20px',
+        'width': '300px', 'backgroundColor': '#16213e', 'padding': '20px',
         'borderRight': '1px solid #2c3e50', 'overflowY': 'auto'
     },
     'centerPanel': {
@@ -352,67 +363,52 @@ STYLES = {
         'flexDirection': 'column', 'minWidth': '0'
     },
     'rightPanel': {
-        'width': '300px', 'backgroundColor': '#16213e', 'padding': '20px',
+        'width': '320px', 'backgroundColor': '#16213e', 'padding': '20px',
         'borderLeft': '1px solid #2c3e50', 'overflowY': 'auto'
     },
     'panelTitle': {
-        'fontSize': '14px', 'fontWeight': '600', 'color': '#3498db',
+        'fontSize': '13px', 'fontWeight': '600', 'color': '#3498db',
         'textTransform': 'uppercase', 'letterSpacing': '1px',
-        'marginBottom': '20px', 'paddingBottom': '10px',
-        'borderBottom': '1px solid #2c3e50'
+        'marginBottom': '15px', 'paddingBottom': '10px', 'borderBottom': '1px solid #2c3e50'
     },
-    'controlGroup': {
-        'marginBottom': '20px'
-    },
-    'label': {
-        'fontSize': '12px', 'color': '#95a5a6', 'marginBottom': '8px',
-        'display': 'block', 'fontWeight': '500'
-    },
+    'controlGroup': {'marginBottom': '20px'},
+    'label': {'fontSize': '12px', 'color': '#95a5a6', 'marginBottom': '8px', 'display': 'block', 'fontWeight': '500'},
     'button': {
         'width': '100%', 'padding': '12px 20px', 'border': 'none',
         'borderRadius': '8px', 'cursor': 'pointer', 'fontSize': '14px',
-        'fontWeight': '600', 'transition': 'all 0.3s ease',
-        'marginBottom': '10px'
+        'fontWeight': '600', 'marginBottom': '10px'
     },
-    'primaryBtn': {
-        'background': 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)',
-        'color': 'white'
-    },
-    'dangerBtn': {
-        'background': 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)',
-        'color': 'white'
-    },
-    'secondaryBtn': {
-        'background': 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)',
-        'color': 'white'
-    },
+    'primaryBtn': {'background': 'linear-gradient(135deg, #2ecc71 0%, #27ae60 100%)', 'color': 'white'},
+    'dangerBtn': {'background': 'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)', 'color': 'white'},
     'statsCard': {
-        'backgroundColor': '#1a1a2e', 'borderRadius': '8px', 'padding': '15px',
-        'marginBottom': '15px', 'border': '1px solid #2c3e50'
+        'backgroundColor': '#1a1a2e', 'borderRadius': '8px', 'padding': '12px',
+        'marginBottom': '10px', 'border': '1px solid #2c3e50'
     },
-    'statValue': {
-        'fontSize': '24px', 'fontWeight': '700', 'color': '#3498db'
-    },
-    'statLabel': {
-        'fontSize': '11px', 'color': '#7f8c8d', 'textTransform': 'uppercase'
+    'statValue': {'fontSize': '20px', 'fontWeight': '700', 'color': '#3498db'},
+    'statLabel': {'fontSize': '10px', 'color': '#7f8c8d', 'textTransform': 'uppercase'},
+    'trainCard': {
+        'backgroundColor': '#1a1a2e', 'borderRadius': '8px', 'padding': '12px',
+        'marginBottom': '10px', 'borderLeft': '4px solid #3498db'
     },
     'logEntry': {
-        'padding': '10px 12px', 'backgroundColor': '#1a1a2e', 'borderRadius': '6px',
-        'marginBottom': '8px', 'borderLeft': '3px solid #3498db', 'fontSize': '12px'
+        'padding': '8px 10px', 'backgroundColor': '#1a1a2e', 'borderRadius': '6px',
+        'marginBottom': '6px', 'borderLeft': '3px solid #3498db', 'fontSize': '11px'
     },
-    'logTime': {
-        'color': '#7f8c8d', 'fontSize': '10px', 'marginBottom': '4px'
-    },
-    'logMessage': {
-        'color': '#ecf0f1'
-    },
-    'trainIndicator': {
-        'display': 'flex', 'alignItems': 'center', 'padding': '10px',
-        'backgroundColor': '#1a1a2e', 'borderRadius': '8px', 'marginBottom': '10px'
-    },
-    'trainDot': {
-        'width': '12px', 'height': '12px', 'borderRadius': '50%', 'marginRight': '10px'
+    'logTime': {'color': '#7f8c8d', 'fontSize': '9px', 'marginBottom': '2px'},
+    'logMessage': {'color': '#ecf0f1'},
+    'phaseTag': {
+        'display': 'inline-block', 'padding': '2px 8px', 'borderRadius': '10px',
+        'fontSize': '10px', 'fontWeight': '600', 'marginLeft': '8px'
     }
+}
+
+PHASE_COLORS = {
+    'waiting': {'bg': '#95a5a6', 'text': 'white'},
+    'departing': {'bg': '#3498db', 'text': 'white'},
+    'arriving': {'bg': '#f39c12', 'text': 'white'},
+    'loading': {'bg': '#9b59b6', 'text': 'white'},
+    'returning': {'bg': '#1abc9c', 'text': 'white'},
+    'completed': {'bg': '#2ecc71', 'text': 'white'},
 }
 
 # --------------------------------------------------
@@ -420,57 +416,44 @@ STYLES = {
 # --------------------------------------------------
 
 app.layout = html.Div(style=STYLES['container'], children=[
-    # Hidden stores
-    dcc.Store(id='simulation-state', data={'trains': [], 'logs': [], 'running': False}),
+    dcc.Store(id='simulation-state', data={'trains': [], 'logs': [], 'running': False, 'tick': 0, 'total_distance': 0}),
     dcc.Interval(id='animation-interval', interval=50, n_intervals=0, disabled=True),
     
     # Header
     html.Div(style=STYLES['header'], children=[
         html.H1('Railyard Simulation Control Center', style=STYLES['title']),
-        html.Div(style={'display': 'flex', 'gap': '20px', 'alignItems': 'center'}, children=[
-            html.Div(id='sim-status', children=[
-                html.Span('●', style={'color': '#e74c3c', 'marginRight': '8px'}),
-                html.Span('Idle', style={'color': '#95a5a6'})
-            ])
+        html.Div(id='sim-status', children=[
+            html.Span('●', style={'color': '#e74c3c', 'marginRight': '8px', 'fontSize': '16px'}),
+            html.Span('Idle', style={'color': '#95a5a6', 'fontSize': '14px'})
         ])
     ]),
     
     # Main content
     html.Div(style=STYLES['main'], children=[
-        # Left Panel - Controls
+        # Left Panel - Controls & Train Status
         html.Div(style=STYLES['leftPanel'], children=[
             html.Div(style=STYLES['panelTitle'], children='Simulation Controls'),
             
-            # Train count
             html.Div(style=STYLES['controlGroup'], children=[
                 html.Label('Number of Trains', style=STYLES['label']),
                 dcc.Slider(id='train-count-slider', min=1, max=5, step=1, value=3,
-                          marks={i: {'label': str(i), 'style': {'color': '#95a5a6'}} for i in range(1, 6)},
-                          className='custom-slider')
+                          marks={i: {'label': str(i), 'style': {'color': '#95a5a6'}} for i in range(1, 6)})
             ]),
             
-            # Speed control
             html.Div(style=STYLES['controlGroup'], children=[
-                html.Label('Train Speed', style=STYLES['label']),
-                dcc.Slider(id='speed-slider', min=10, max=200, step=10, value=80,
-                          marks={i: {'label': f'{i}', 'style': {'color': '#95a5a6'}} for i in [10, 50, 100, 150, 200]},
-                          className='custom-slider'),
-                html.Div(id='speed-display', style={'textAlign': 'center', 'marginTop': '8px', 'color': '#3498db', 'fontSize': '14px'})
+                html.Label('Train Speed (km/h)', style=STYLES['label']),
+                dcc.Slider(id='speed-slider', min=20, max=200, step=10, value=100,
+                          marks={i: {'label': str(i), 'style': {'color': '#95a5a6'}} for i in [20, 60, 100, 150, 200]}),
+                html.Div(id='speed-display', style={'textAlign': 'center', 'marginTop': '5px', 'color': '#3498db', 'fontSize': '13px'})
             ]),
             
-            # Buttons
-            html.Div(style={'marginTop': '30px'}, children=[
-                html.Button('Run Simulation', id='run-btn', n_clicks=0,
-                           style={**STYLES['button'], **STYLES['primaryBtn']}),
-                html.Button('Stop All', id='stop-btn', n_clicks=0,
-                           style={**STYLES['button'], **STYLES['dangerBtn']}),
-                html.Button('Add Train', id='add-train-btn', n_clicks=0,
-                           style={**STYLES['button'], **STYLES['secondaryBtn']}),
+            html.Div(style={'marginTop': '20px'}, children=[
+                html.Button('Run Simulation', id='run-btn', n_clicks=0, style={**STYLES['button'], **STYLES['primaryBtn']}),
+                html.Button('Stop All', id='stop-btn', n_clicks=0, style={**STYLES['button'], **STYLES['dangerBtn']}),
             ]),
             
-            # Active trains
-            html.Div(style={'marginTop': '30px'}, children=[
-                html.Div(style=STYLES['panelTitle'], children='Active Trains'),
+            html.Div(style={'marginTop': '25px'}, children=[
+                html.Div(style=STYLES['panelTitle'], children='Train Status'),
                 html.Div(id='train-list')
             ])
         ]),
@@ -481,25 +464,31 @@ app.layout = html.Div(style=STYLES['container'], children=[
                      style={'height': '100%'}, config={'displayModeBar': False, 'scrollZoom': True})
         ]),
         
-        # Right Panel - Updates
+        # Right Panel - Live Updates
         html.Div(style=STYLES['rightPanel'], children=[
-            html.Div(style=STYLES['panelTitle'], children='Live Updates'),
+            html.Div(style=STYLES['panelTitle'], children='Live Statistics'),
             
-            # Stats
-            html.Div(style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '10px', 'marginBottom': '20px'}, children=[
+            html.Div(style={'display': 'grid', 'gridTemplateColumns': '1fr 1fr', 'gap': '8px', 'marginBottom': '15px'}, children=[
                 html.Div(style=STYLES['statsCard'], children=[
                     html.Div(id='active-trains-count', style=STYLES['statValue'], children='0'),
-                    html.Div(style=STYLES['statLabel'], children='Active Trains')
+                    html.Div(style=STYLES['statLabel'], children='Active')
+                ]),
+                html.Div(style=STYLES['statsCard'], children=[
+                    html.Div(id='completed-count', style=STYLES['statValue'], children='0'),
+                    html.Div(style=STYLES['statLabel'], children='Completed')
+                ]),
+                html.Div(style=STYLES['statsCard'], children=[
+                    html.Div(id='loading-count', style=STYLES['statValue'], children='0'),
+                    html.Div(style=STYLES['statLabel'], children='Loading')
                 ]),
                 html.Div(style=STYLES['statsCard'], children=[
                     html.Div(id='total-distance', style=STYLES['statValue'], children='0'),
-                    html.Div(style=STYLES['statLabel'], children='Total Distance')
+                    html.Div(style=STYLES['statLabel'], children='Distance (m)')
                 ]),
             ]),
             
-            # Log feed
             html.Div(style=STYLES['panelTitle'], children='Event Log'),
-            html.Div(id='log-feed', style={'maxHeight': '500px', 'overflowY': 'auto'})
+            html.Div(id='log-feed', style={'maxHeight': '450px', 'overflowY': 'auto'})
         ])
     ])
 ])
@@ -508,86 +497,67 @@ app.layout = html.Div(style=STYLES['container'], children=[
 # Callbacks
 # --------------------------------------------------
 
-@app.callback(
-    Output('speed-display', 'children'),
-    Input('speed-slider', 'value')
-)
+@app.callback(Output('speed-display', 'children'), Input('speed-slider', 'value'))
 def update_speed_display(value):
     return f'{value} km/h'
 
 
 @app.callback(
-    [Output('simulation-state', 'data'),
-     Output('animation-interval', 'disabled')],
-    [Input('run-btn', 'n_clicks'),
-     Input('stop-btn', 'n_clicks'),
-     Input('add-train-btn', 'n_clicks')],
-    [State('train-count-slider', 'value'),
-     State('speed-slider', 'value'),
-     State('simulation-state', 'data')],
+    [Output('simulation-state', 'data'), Output('animation-interval', 'disabled')],
+    [Input('run-btn', 'n_clicks'), Input('stop-btn', 'n_clicks')],
+    [State('train-count-slider', 'value'), State('speed-slider', 'value'), State('simulation-state', 'data')],
     prevent_initial_call=True
 )
-def control_simulation(run_clicks, stop_clicks, add_clicks, train_count, speed, state):
+def control_simulation(run_clicks, stop_clicks, train_count, speed, state):
     from dash import ctx
     triggered = ctx.triggered_id
     
     if triggered == 'stop-btn':
         state['trains'] = []
         state['running'] = False
-        state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'), 'msg': 'Simulation stopped'}] + state.get('logs', [])[:20]
+        state['tick'] = 0
+        state['total_distance'] = 0
+        state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'), 'msg': '🛑 Simulation stopped', 'type': 'system'}] + state.get('logs', [])[:30]
         return state, True
     
     if triggered == 'run-btn':
-        # Create multiple trains with different routes
         state['trains'] = []
-        used_routes = []
-        for i in range(train_count):
-            # Pick different routes for each train
-            available = [r for r in DEFAULT_ROUTES if r not in used_routes]
-            if not available:
-                available = DEFAULT_ROUTES
-            route = random.choice(available)
-            used_routes.append(route)
-            
-            route_edges, route_nodes = compute_route(route[0], route[1], railyard_graph)
+        state['logs'] = []
+        state['tick'] = 0
+        state['total_distance'] = 0
+        
+        # Assign unique missions to each train - no duplicates to avoid collision
+        available_missions = TRAIN_MISSIONS[:train_count]
+        
+        for i, mission in enumerate(available_missions):
+            route_edges, route_nodes = compute_route(mission['entry'], mission['dest'], railyard_graph)
             if route_edges:
                 total_len = sum(edge_paths.get(e, edge_paths.get((e[1], e[0]), {})).get('edge_length', 0) for e in route_edges)
+                # Stagger start times to prevent collision at entry
                 state['trains'].append({
                     'id': i,
+                    'name': TRAIN_COLORS[i]['name'],
                     'route_edges': [list(e) for e in route_edges],
                     'route_nodes': route_nodes,
+                    'return_route_edges': None,  # Will be set when returning
                     'current_edge_index': 0,
                     'distance_on_edge': 0.0,
                     'speed': speed,
-                    'status': 'moving',
-                    'visited_switches': [route[0]],
+                    'phase': 'waiting',  # waiting, departing, arriving, loading, returning, completed
+                    'start_delay': i * 30,  # Stagger starts by 30 ticks each
+                    'load_timer': 0,
+                    'load_time': mission['load_time'],
+                    'visited_switches': [],
                     'total_length': total_len,
-                    'position': coordinates.get(route[0])
+                    'position': None,
+                    'entry_node': mission['entry'],
+                    'dest_node': mission['dest'],
+                    'dest_name': mission['desc'],
+                    'progress': 0,
                 })
         
         state['running'] = True
-        state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'), 'msg': f'Started {train_count} train(s)'}] + state.get('logs', [])[:20]
-        return state, False
-    
-    if triggered == 'add-train-btn' and state.get('running'):
-        route = random.choice(DEFAULT_ROUTES)
-        route_edges, route_nodes = compute_route(route[0], route[1], railyard_graph)
-        if route_edges:
-            total_len = sum(edge_paths.get(e, edge_paths.get((e[1], e[0]), {})).get('edge_length', 0) for e in route_edges)
-            new_id = len(state['trains'])
-            state['trains'].append({
-                'id': new_id,
-                'route_edges': [list(e) for e in route_edges],
-                'route_nodes': route_nodes,
-                'current_edge_index': 0,
-                'distance_on_edge': 0.0,
-                'speed': speed,
-                'status': 'moving',
-                'visited_switches': [route[0]],
-                'total_length': total_len,
-                'position': coordinates.get(route[0])
-            })
-            state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'), 'msg': f'Added {TRAIN_COLORS[new_id % len(TRAIN_COLORS)]["name"]}'}] + state.get('logs', [])[:20]
+        state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'), 'msg': f'🚀 Simulation started with {train_count} train(s)', 'type': 'system'}]
         return state, False
     
     return state, not state.get('running', False)
@@ -598,50 +568,95 @@ def control_simulation(run_clicks, stop_clicks, add_clicks, train_count, speed, 
      Output('simulation-state', 'data', allow_duplicate=True),
      Output('train-list', 'children'),
      Output('active-trains-count', 'children'),
+     Output('completed-count', 'children'),
+     Output('loading-count', 'children'),
      Output('total-distance', 'children'),
      Output('log-feed', 'children'),
      Output('sim-status', 'children')],
     Input('animation-interval', 'n_intervals'),
-    [State('simulation-state', 'data'),
-     State('speed-slider', 'value')],
+    [State('simulation-state', 'data'), State('speed-slider', 'value')],
     prevent_initial_call=True
 )
 def update_animation(n_intervals, state, speed):
     if not state or not state.get('trains'):
-        return create_figure(), state, [], '0', '0m', [], [
-            html.Span('●', style={'color': '#e74c3c', 'marginRight': '8px'}),
-            html.Span('Idle', style={'color': '#95a5a6'})
+        return create_figure(), state, [], '0', '0', '0', '0', [], [
+            html.Span('●', style={'color': '#e74c3c', 'marginRight': '8px', 'fontSize': '16px'}),
+            html.Span('Idle', style={'color': '#95a5a6', 'fontSize': '14px'})
         ]
     
+    state['tick'] = state.get('tick', 0) + 1
     all_route_edges = []
     highlighted = []
     active_count = 0
-    total_dist = 0
+    completed_count = 0
+    loading_count = 0
     
-    # Update each train - FIXED PHYSICS: much faster movement
     for train in state['trains']:
-        if train.get('status') == 'stopped':
+        train['speed'] = speed
+        color_info = TRAIN_COLORS[train['id'] % len(TRAIN_COLORS)]
+        
+        # Handle waiting phase (staggered start)
+        if train['phase'] == 'waiting':
+            if state['tick'] >= train['start_delay']:
+                train['phase'] = 'departing'
+                train['position'] = coordinates.get(train['entry_node'])
+                train['visited_switches'] = [train['entry_node']]
+                state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'), 
+                                  'msg': f'🚂 {color_info["name"]} departing from Entry {train["entry_node"]}',
+                                  'type': 'depart', 'train': train['id']}] + state.get('logs', [])[:30]
             continue
         
-        active_count += 1
-        train['speed'] = speed
+        # Handle completed phase
+        if train['phase'] == 'completed':
+            completed_count += 1
+            continue
         
+        # Handle loading phase
+        if train['phase'] == 'loading':
+            loading_count += 1
+            train['load_timer'] += 1
+            if train['load_timer'] >= train['load_time']:
+                # Done loading, start return journey
+                return_edges, return_nodes = compute_route(train['dest_node'], train['entry_node'], railyard_graph)
+                if return_edges:
+                    train['route_edges'] = [list(e) for e in return_edges]
+                    train['route_nodes'] = return_nodes
+                    train['current_edge_index'] = 0
+                    train['distance_on_edge'] = 0
+                    train['phase'] = 'returning'
+                    train['visited_switches'] = [train['dest_node']]
+                    state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'),
+                                      'msg': f'📦 {color_info["name"]} loaded, returning to Entry {train["entry_node"]}',
+                                      'type': 'return', 'train': train['id']}] + state.get('logs', [])[:30]
+            continue
+        
+        # Moving phases: departing, arriving, returning
+        active_count += 1
         route_edges = [tuple(e) for e in train['route_edges']]
         all_route_edges.extend(route_edges)
         idx = train['current_edge_index']
         dist = train['distance_on_edge']
         
-        # FIXED: Much higher delta for visible movement
-        # At 100 km/h = 27.7 m/s, at 50ms interval = 1.38m per frame
-        # Our coordinate units are roughly meters, so multiply by 20 for good visual speed
-        delta = (speed / 3.6) * 0.05 * 25  # speed in m/s * interval_sec * scale factor
+        # Calculate movement delta
+        delta = (speed / 3.6) * 0.05 * 25
         
         if idx >= len(route_edges):
-            train['status'] = 'stopped'
-            final_node = route_edges[-1][1] if route_edges else train['route_nodes'][-1]
-            train['position'] = coordinates.get(final_node)
-            if {'time': datetime.now().strftime('%H:%M:%S'), 'msg': f'{TRAIN_COLORS[train["id"] % len(TRAIN_COLORS)]["name"]} arrived'} not in state['logs'][:5]:
-                state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'), 'msg': f'{TRAIN_COLORS[train["id"] % len(TRAIN_COLORS)]["name"]} arrived at destination'}] + state.get('logs', [])[:20]
+            # Reached destination
+            if train['phase'] == 'departing':
+                train['phase'] = 'loading'
+                train['load_timer'] = 0
+                train['position'] = coordinates.get(train['dest_node'])
+                train['progress'] = 50
+                state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'),
+                                  'msg': f'📍 {color_info["name"]} arrived at {train["dest_name"]}',
+                                  'type': 'arrive', 'train': train['id']}] + state.get('logs', [])[:30]
+            elif train['phase'] == 'returning':
+                train['phase'] = 'completed'
+                train['position'] = coordinates.get(train['entry_node'])
+                train['progress'] = 100
+                state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'),
+                                  'msg': f'✅ {color_info["name"]} completed round trip',
+                                  'type': 'complete', 'train': train['id']}] + state.get('logs', [])[:30]
             continue
         
         current_edge = route_edges[idx]
@@ -654,7 +669,7 @@ def update_animation(n_intervals, state, speed):
         
         edge_len = edge_data['total_length']
         dist += delta
-        total_dist += delta
+        state['total_distance'] = state.get('total_distance', 0) + delta
         
         if dist >= edge_len:
             train['current_edge_index'] += 1
@@ -662,11 +677,18 @@ def update_animation(n_intervals, state, speed):
             dest = current_edge[1]
             if dest not in train['visited_switches']:
                 train['visited_switches'].append(dest)
+                # Log switch passage
+                if dest in TRACK_NAMES:
+                    state['logs'] = [{'time': datetime.now().strftime('%H:%M:%S'),
+                                      'msg': f'🔀 {color_info["name"]} passing {TRACK_NAMES[dest]}',
+                                      'type': 'switch', 'train': train['id']}] + state.get('logs', [])[:30]
             highlighted.append(dest)
             
-            if train['current_edge_index'] >= len(route_edges):
-                train['status'] = 'stopped'
-                train['position'] = coordinates.get(route_edges[-1][1])
+            # Update progress
+            progress_pct = (train['current_edge_index'] / len(route_edges)) * 50
+            if train['phase'] == 'returning':
+                progress_pct = 50 + progress_pct
+            train['progress'] = min(100, progress_pct)
         else:
             train['distance_on_edge'] = dist
             x, y = get_position_on_edge(current_edge, dist, edge_paths)
@@ -677,39 +699,69 @@ def update_animation(n_intervals, state, speed):
         
         highlighted.extend(train.get('visited_switches', []))
     
-    # Build train list UI
+    # Build train status cards
     train_list_items = []
-    for i, train in enumerate(state['trains']):
-        color = TRAIN_COLORS[i % len(TRAIN_COLORS)]
-        status_color = '#2ecc71' if train.get('status') == 'moving' else '#e74c3c'
+    for train in state['trains']:
+        color = TRAIN_COLORS[train['id'] % len(TRAIN_COLORS)]
+        phase = train.get('phase', 'waiting')
+        phase_style = PHASE_COLORS.get(phase, PHASE_COLORS['waiting'])
+        
+        # Progress bar
+        progress = train.get('progress', 0)
+        
+        phase_display = {
+            'waiting': 'Waiting...', 'departing': f'→ {train["dest_name"]}',
+            'loading': f'Loading at {train["dest_name"]}', 'returning': f'← Entry {train["entry_node"]}',
+            'completed': 'Trip Complete'
+        }.get(phase, phase)
+        
         train_list_items.append(
-            html.Div(style=STYLES['trainIndicator'], children=[
-                html.Div(style={**STYLES['trainDot'], 'backgroundColor': color['color']}),
-                html.Div(children=[
-                    html.Div(color['name'], style={'fontWeight': '600', 'fontSize': '12px'}),
-                    html.Div(f"{'Moving' if train.get('status') == 'moving' else 'Arrived'}", 
-                            style={'fontSize': '10px', 'color': status_color})
+            html.Div(style={**STYLES['trainCard'], 'borderLeftColor': color['color']}, children=[
+                html.Div(style={'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center', 'marginBottom': '8px'}, children=[
+                    html.Span(color['name'], style={'fontWeight': '600', 'fontSize': '13px', 'color': color['color']}),
+                    html.Span(phase.upper(), style={**STYLES['phaseTag'], 'backgroundColor': phase_style['bg'], 'color': phase_style['text']})
+                ]),
+                html.Div(phase_display, style={'fontSize': '11px', 'color': '#bdc3c7', 'marginBottom': '8px'}),
+                html.Div(style={'backgroundColor': '#2c3e50', 'borderRadius': '4px', 'height': '6px', 'overflow': 'hidden'}, children=[
+                    html.Div(style={'width': f'{progress}%', 'height': '100%', 'backgroundColor': color['color'], 'transition': 'width 0.3s'})
                 ])
             ])
         )
     
-    # Build log entries
-    log_entries = [
-        html.Div(style=STYLES['logEntry'], children=[
-            html.Div(log['time'], style=STYLES['logTime']),
-            html.Div(log['msg'], style=STYLES['logMessage'])
-        ]) for log in state.get('logs', [])[:10]
-    ]
+    # Build log entries with icons
+    log_entries = []
+    for log in state.get('logs', [])[:15]:
+        border_color = '#3498db'
+        if log.get('type') == 'depart':
+            border_color = '#3498db'
+        elif log.get('type') == 'arrive':
+            border_color = '#f39c12'
+        elif log.get('type') == 'return':
+            border_color = '#1abc9c'
+        elif log.get('type') == 'complete':
+            border_color = '#2ecc71'
+        elif log.get('type') == 'switch':
+            border_color = '#9b59b6'
+        
+        log_entries.append(
+            html.Div(style={**STYLES['logEntry'], 'borderLeftColor': border_color}, children=[
+                html.Div(log['time'], style=STYLES['logTime']),
+                html.Div(log['msg'], style=STYLES['logMessage'])
+            ])
+        )
     
     # Status indicator
+    status_color = '#2ecc71' if active_count > 0 else ('#f39c12' if loading_count > 0 else '#e74c3c')
+    status_text = f'{active_count} Moving' if active_count > 0 else (f'{loading_count} Loading' if loading_count > 0 else 'Idle')
     status = [
-        html.Span('●', style={'color': '#2ecc71' if active_count > 0 else '#e74c3c', 'marginRight': '8px'}),
-        html.Span(f'{active_count} Running' if active_count > 0 else 'Idle', style={'color': '#95a5a6'})
+        html.Span('●', style={'color': status_color, 'marginRight': '8px', 'fontSize': '16px'}),
+        html.Span(status_text, style={'color': '#95a5a6', 'fontSize': '14px'})
     ]
     
     fig = create_figure(trains=state['trains'], highlighted_switches=list(set(highlighted)), all_route_edges=all_route_edges)
     
-    return fig, state, train_list_items, str(active_count), f'{int(total_dist)}m', log_entries, status
+    return (fig, state, train_list_items, str(active_count), str(completed_count), 
+            str(loading_count), f'{int(state.get("total_distance", 0))}', log_entries, status)
 
 
 if __name__ == '__main__':
