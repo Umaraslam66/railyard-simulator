@@ -65,13 +65,13 @@ curve_edges = {(129, 93): {'control_offset': (50, 40)}}
 
 # Mixed edges - adjusted control points to prevent overlap
 mixed_edges = {
-    # Main line from 102 to 129 - sweeping curve to the right
-    (102, 129): {'straight_length': 450, 'control_offset': (150, -350), 'angle': np.radians(35), 'curve_first': False},
+    # Main line from 102 to 129 - downward arc toward 112/121 with a gentler dip
+    (102, 129): {'straight_length': 430, 'control_offset': (260, -420), 'angle': np.radians(32), 'curve_first': False},
     # Track 134 to 142 - curve going left
     (134, 142): {'straight_length': 540, 'control_offset': (3, 720), 'angle': np.radians(90), 'curve_first': False},
-    # Storage tracks 100, 101 - spread apart with different angles
-    (131, 100): {'straight_length': 270, 'control_offset': (3, -360), 'angle': np.radians(225), 'curve_first': False},
-    (131, 101): {'straight_length': 360, 'control_offset': (3, -360), 'angle': np.radians(265), 'curve_first': False},
+    # Storage tracks 100, 101 - spread apart with different angles (101 dips lower/left to avoid crossing 102-129)
+    (131, 100): {'straight_length': 270, 'control_offset': (3, -180), 'angle': np.radians(225), 'curve_first': False},
+    (131, 101): {'straight_length': 360, 'control_offset': (0, -240), 'angle': np.radians(255), 'curve_first': False},
     # Coil loading tracks 98, 99 - spread apart to avoid overlap
     (142, 98): {'straight_length': 810, 'control_offset': (3, -540), 'angle': np.radians(90), 'curve_first': True},
     (142, 99): {'straight_length': 1080, 'control_offset': (3, -540), 'angle': np.radians(90), 'curve_first': True},
