@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.so
+.venv/
+venv/
+env/
+.env
+
+# Training outputs (regenerate with: python train_agent.py)
+training_output/
+
+# IDE / OS
+.idea/
+.DS_Store
+*.swp
+*.swo
