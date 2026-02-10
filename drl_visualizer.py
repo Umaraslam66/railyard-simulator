@@ -529,15 +529,28 @@ def _tab2_layout():
 
 def _tab3_layout():
     return html.Div(children=[
-        html.Div(style={"padding": "12px 20px", "display": "flex",
-                         "gap": "12px", "alignItems": "center",
-                         "backgroundColor": PANEL_BG,
+        html.Div(style={"padding": "16px 20px", "backgroundColor": PANEL_BG,
                          "borderBottom": f"1px solid {BORDER}"}, children=[
-            html.Button("Start Comparison", id="c-start", n_clicks=0,
-                         style=_btn_blue),
-            html.Button("Stop", id="c-stop", n_clicks=0, style=_btn_red),
-            html.Div(id="c-status", style={"marginLeft": "auto",
-                                            "color": ACCENT, "fontWeight": "600"}),
+            html.Div([
+                html.Span("Same scenario, same delays — different decisions. ", style={"color": TEXT_COL}),
+                html.Span("Random policy picks a track (or wait) at random. "),
+                html.Span("The trained agent uses what it learned: ", style={"color": TEXT_COL}),
+                html.Span("higher total reward", style={"color": "#2ecc71", "fontWeight": "700"}),
+                html.Span(" = more trains ", style={"color": TEXT_COL}),
+                html.Span("on time", style={"color": "#2ecc71", "fontWeight": "700"}),
+                html.Span(", fewer ", style={"color": TEXT_COL}),
+                html.Span("conflicts", style={"color": "#e74c3c", "fontWeight": "700"}),
+                html.Span(", and more trains ", style={"color": TEXT_COL}),
+                html.Span("completed", style={"color": "#2ecc71", "fontWeight": "700"}),
+                html.Span(". Compare the numbers below after a run.", style={"color": MUTED, "fontSize": "12px"}),
+            ], style={"fontSize": "13px", "lineHeight": "1.5", "marginBottom": "12px"}),
+            html.Div(style={"display": "flex", "gap": "12px", "alignItems": "center"}, children=[
+                html.Button("Start Comparison", id="c-start", n_clicks=0,
+                             style=_btn_blue),
+                html.Button("Stop", id="c-stop", n_clicks=0, style=_btn_red),
+                html.Div(id="c-status", style={"marginLeft": "auto",
+                                                "color": ACCENT, "fontWeight": "600"}),
+            ]),
         ]),
         html.Div(style={"display": "flex", "gap": "4px"}, children=[
             html.Div(style={"flex": "1", "textAlign": "center"}, children=[
@@ -629,6 +642,23 @@ def _tab4_layout():
             "it gradually discovers: (1) match cargo types, (2) avoid occupied "
             "tracks, (3) time assignments to meet departure slots, and "
             "(4) stagger routes to prevent junction conflicts.",
+            "#2ecc71"),
+        box("Why the trained agent is better than random",
+            html.Div([
+                "In the \"Agent vs Random\" tab, both policies see the same scenario (same trains, delays, slots). "
+                "The difference is how they choose: ",
+                html.Strong("random", style={"color": "#e74c3c"}),
+                " picks an action by chance; the ",
+                html.Strong("trained agent", style={"color": "#2ecc71"}),
+                " uses its learned policy. You’ll see the agent do better on: ",
+                html.Ul(style={"margin": "8px 0", "paddingLeft": "20px"}, children=[
+                    html.Li(html.Strong("Reward") + " — higher total (more on-time bonuses, fewer penalties)."),
+                    html.Li(html.Strong("On-Time") + " — more trains leaving within their mainline slot."),
+                    html.Li(html.Strong("Conflicts") + " — fewer junction conflicts (safer, less delay)."),
+                    html.Li(html.Strong("Completed") + " — more trains finished before the step limit."),
+                ]),
+                "So \"better\" here means: the agent has learned to schedule in a way that maximizes reward in this environment.",
+            ], style={"lineHeight": "1.6"}),
             "#2ecc71"),
         box("Cargo Types & Tracks",
             html.Div(style={"display": "flex", "gap": "20px",
@@ -859,7 +889,7 @@ def compare_tick(_):
     _add_trains_to_fig(fig_a, info_a["trains_full"],
                        info_a["decisions"], info_a["step"])
 
-    metrics = _compare_metrics(info_r, info_a)
+    metrics = _compare_metrics(info_r, info_a, done=done)
     step = max(info_r["step"], info_a["step"])
     status = f"Step {step}/{RailyardEnv.MAX_STEPS}"
     if done:
@@ -934,7 +964,7 @@ def _decision_log(decisions):
     ])
 
 
-def _compare_metrics(info_r, info_a):
+def _compare_metrics(info_r, info_a, done=False):
     rows = [
         ("Reward", info_r["total_reward"], info_a["total_reward"]),
         ("On-Time", info_r["on_time"], info_a["on_time"]),
@@ -942,8 +972,7 @@ def _compare_metrics(info_r, info_a):
         ("Conflicts", info_r["conflicts"], info_a["conflicts"]),
         ("Completed", info_r["completed"], info_a["completed"]),
     ]
-    return html.Div(style={"display": "flex", "justifyContent": "center",
-                            "gap": "40px", "flexWrap": "wrap"}, children=[
+    cards = [
         html.Div(style={**_card, "textAlign": "center", "minWidth": "130px"},
                  children=[
             html.Div(label, style={"fontSize": "10px", "color": MUTED,
@@ -965,6 +994,36 @@ def _compare_metrics(info_r, info_a):
                 ]),
             ]),
         ]) for label, rv, av in rows
+    ]
+    # When episode is done, show a one-line verdict so "how is agent better" is obvious
+    summary = []
+    if done:
+        d_reward = info_a["total_reward"] - info_r["total_reward"]
+        d_ontime = info_a["on_time"] - info_r["on_time"]
+        d_conflicts = info_r["conflicts"] - info_a["conflicts"]  # fewer is better
+        d_completed = info_a["completed"] - info_r["completed"]
+        winner = "Agent" if d_reward > 0 else ("Random" if d_reward < 0 else "Tie")
+        parts = []
+        if abs(d_reward) >= 0.5:
+            parts.append(f"{d_reward:+.1f} reward")
+        if d_ontime != 0:
+            parts.append(f"{d_ontime:+d} on-time")
+        if d_conflicts != 0:
+            parts.append(f"{d_conflicts:+d} conflicts")
+        if d_completed != 0:
+            parts.append(f"{d_completed:+d} completed")
+        verdict = f"{winner} wins this run" + (": " + ", ".join(parts) if parts else ".")
+        summary = [
+            html.Div(style={**_card, "marginBottom": "16px", "textAlign": "center",
+                            "border": f"2px solid {'#2ecc71' if d_reward > 0 else '#e74c3c' if d_reward < 0 else MUTED}",
+                            "padding": "12px 20px"}, children=[
+                html.Div("Run complete — how did the agent do?", style={"fontSize": "10px", "color": MUTED, "textTransform": "uppercase", "letterSpacing": "1px", "marginBottom": "4px"}),
+                html.Div(verdict, style={"fontSize": "16px", "fontWeight": "800", "color": TEXT_COL}),
+            ])
+        ]
+    return html.Div(children=summary + [
+        html.Div(style={"display": "flex", "justifyContent": "center",
+                        "gap": "40px", "flexWrap": "wrap"}, children=cards)
     ])
 
 
