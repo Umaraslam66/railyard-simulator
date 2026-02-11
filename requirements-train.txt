@@ -1,0 +1,5 @@
+# Full dependencies for local development and training.
+# Install with:  pip install -r requirements-train.txt
+-r requirements.txt
+stable-baselines3>=2.2.0
+torch>=2.1.0

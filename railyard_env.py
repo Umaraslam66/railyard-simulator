@@ -79,10 +79,14 @@ class RailyardEnv(gym.Env):
 
         self.graph = self._build_graph()
         self._precompute_routes()
+        self._episode_max_steps = self.MAX_STEPS  # can be overridden in reset(options={"max_steps": N})
 
-        # action 0..6 = assign first-waiting train to track i
-        # action 7    = hold / wait
-        self.action_space = spaces.Discrete(self.NUM_TRACKS + 1)
+        # action: (track_or_wait, runtime_option, loading_option)
+        # track_or_wait: 0..6 = assign to track, 7 = wait
+        # runtime_option: 0=0.8x, 1=1.0x, 2=1.2x travel time (within bounds)
+        # loading_option: 0=0.8x, 1=1.0x, 2=1.2x loading time (within bounds)
+        # Agent has room to speed up or slow down to meet mainline schedule under delays
+        self.action_space = spaces.MultiDiscrete([self.NUM_TRACKS + 1, 3, 3])
 
         # observation: tracks(7*3) + trains(8*5) + time(1) = 62
         obs_dim = self.NUM_TRACKS * 3 + self.MAX_TRAINS * 5 + 1
@@ -133,39 +137,73 @@ class RailyardEnv(gym.Env):
     # ---------------------- reset / obs / info --------------------------
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
+        opts = options or {}
+        self._episode_max_steps = int(opts["max_steps"]) if opts.get("max_steps") is not None else self.MAX_STEPS
 
         self.track_state = np.zeros((self.NUM_TRACKS, 3), dtype=np.float32)
-
         self.trains = []
-        for i in range(self.num_trains):
-            cargo = int(self.np_random.integers(0, 3))
-            entry = self.ENTRY_NODES[int(self.np_random.integers(0, 2))]
-            arrival = int(self.np_random.integers(max(0, i * 5),
-                                                   min(15 + i * 10, 80)))
-            # estimate round-trip for slot calculation
-            compat = [j for j, t in enumerate(self.TRACKS) if t["cargo"] == cargo]
-            if compat:
-                tt_in = self.travel_times.get((entry, compat[0]), 20)
-                tt_out = self.travel_times.get((compat[0], entry), 20)
-            else:
-                tt_in = tt_out = 20
-            op_t = self.OP_TIMES[cargo]
-            slot_center = arrival + tt_in + op_t + tt_out + int(
-                self.np_random.integers(5, 20))
-            slot_center = min(slot_center, self.MAX_STEPS - 5)
 
-            self.trains.append({
-                "id": i, "cargo": cargo, "entry": entry,
-                "arrival": arrival, "slot_center": slot_center,
-                "slot_window": 8,
-                "status": self.WAITING, "assigned_track": -1,
-                "travel_remaining": 0, "op_remaining": 0,
-                "return_remaining": 0,
-                "total_travel_in": 0, "total_travel_out": 0,
-                "route_in": [], "route_out": [],
-                "delay": 0, "current_node": entry,
-                "completed_step": -1,
-            })
+        schedule = opts.get("schedule")
+        delay_vector = opts.get("delay_vector", [])
+
+        if schedule is not None and len(schedule) >= 1:
+            # Fixed schedule: list of {arrival, cargo, entry, slot_center}
+            for i, row in enumerate(schedule):
+                if i >= self.num_trains:
+                    break
+                arrival = int(row["arrival"])
+                cargo = int(row["cargo"])
+                entry = int(row["entry"])
+                slot_center = int(row["slot_center"])
+                # apply arrival delay if provided
+                if i < len(delay_vector) and "arrival_delay" in delay_vector[i]:
+                    arrival = min(arrival + int(delay_vector[i]["arrival_delay"]), self._episode_max_steps - 1)
+                loading_delay = 0
+                if i < len(delay_vector) and "loading_delay" in delay_vector[i]:
+                    loading_delay = int(delay_vector[i]["loading_delay"])
+                self.trains.append({
+                    "id": i, "cargo": cargo, "entry": entry,
+                    "arrival": arrival, "slot_center": slot_center,
+                    "slot_window": 8,
+                    "status": self.WAITING, "assigned_track": -1,
+                    "travel_remaining": 0, "op_remaining": 0,
+                    "return_remaining": 0,
+                    "total_travel_in": 0, "total_travel_out": 0,
+                    "route_in": [], "route_out": [],
+                    "delay": 0, "current_node": entry,
+                    "completed_step": -1,
+                    "loading_delay": loading_delay,
+                    "loading_delay_applied": False,
+                })
+        else:
+            # Random schedule (original behaviour)
+            for i in range(self.num_trains):
+                cargo = int(self.np_random.integers(0, 3))
+                entry = self.ENTRY_NODES[int(self.np_random.integers(0, 2))]
+                arrival = int(self.np_random.integers(max(0, i * 5),
+                                                       min(15 + i * 10, 80)))
+                compat = [j for j, t in enumerate(self.TRACKS) if t["cargo"] == cargo]
+                if compat:
+                    tt_in = self.travel_times.get((entry, compat[0]), 20)
+                    tt_out = self.travel_times.get((compat[0], entry), 20)
+                else:
+                    tt_in = tt_out = 20
+                op_t = self.OP_TIMES[cargo]
+                slot_center = arrival + tt_in + op_t + tt_out + int(
+                    self.np_random.integers(5, 20))
+                slot_center = min(slot_center, self._episode_max_steps - 5)
+                self.trains.append({
+                    "id": i, "cargo": cargo, "entry": entry,
+                    "arrival": arrival, "slot_center": slot_center,
+                    "slot_window": 8,
+                    "status": self.WAITING, "assigned_track": -1,
+                    "travel_remaining": 0, "op_remaining": 0,
+                    "return_remaining": 0,
+                    "total_travel_in": 0, "total_travel_out": 0,
+                    "route_in": [], "route_out": [],
+                    "delay": 0, "current_node": entry,
+                    "completed_step": -1,
+                })
 
         self.current_step = 0
         self.total_reward = 0.0
@@ -182,18 +220,18 @@ class RailyardEnv(gym.Env):
         for i in range(self.NUM_TRACKS):
             o.append(self.track_state[i, 0])
             o.append(self.track_state[i, 1] / 3.0)
-            o.append(min(self.track_state[i, 2] / self.MAX_STEPS, 1.0))
+            o.append(min(self.track_state[i, 2] / self._episode_max_steps, 1.0))
         for i in range(self.MAX_TRAINS):
             if i < len(self.trains):
                 t = self.trains[i]
                 o.append(1.0 if t["arrival"] <= self.current_step else 0.0)
                 o.append((t["cargo"] + 1) / 4.0)
                 o.append(t["status"] / 4.0)
-                o.append(min(t["slot_center"] / self.MAX_STEPS, 1.0))
+                o.append(min(t["slot_center"] / self._episode_max_steps, 1.0))
                 o.append(min(t["delay"] / 50.0, 1.0))
             else:
                 o.extend([0.0] * 5)
-        o.append(self.current_step / self.MAX_STEPS)
+        o.append(self.current_step / self._episode_max_steps)
         return np.array(o, dtype=np.float32)
 
     def _get_info(self):
@@ -221,44 +259,60 @@ class RailyardEnv(gym.Env):
         return None
 
     # ---------------------- step ----------------------------------------
+    def _parse_action(self, action):
+        """Support MultiDiscrete [track, runtime_opt, loading_opt] and legacy Discrete(8)."""
+        a = np.asarray(action).flatten()
+        if a.size == 0:
+            return 7, 1, 1
+        track = int(a[0]) if a.size > 0 else 7
+        rt_opt = int(a[1]) if a.size > 1 else 1
+        ld_opt = int(a[2]) if a.size > 2 else 1
+        rt_opt = max(0, min(2, rt_opt))
+        ld_opt = max(0, min(2, ld_opt))
+        return track, rt_opt, ld_opt
+
     def step(self, action):
-        action = int(action)
+        track, rt_opt, ld_opt = self._parse_action(action)
         reward = 0.0
         step_dec = []
         wt = self._first_waiting_train()
 
+        # Multipliers: 0=0.8x, 1=1.0x, 2=1.2x (within upper bounds)
+        rt_mult = 0.8 + 0.4 * rt_opt
+        ld_mult = 0.8 + 0.4 * ld_opt
+
         # ---- 1. process action ----
-        # Reward hierarchy:  correct >> wrong/occupied >> WAIT
-        # This ensures the agent always prefers trying over waiting.
-        if action < self.NUM_TRACKS and wt is not None:
-            trk = self.TRACKS[action]
-            if self.track_state[action, 0] == 1.0:
+        if track < self.NUM_TRACKS and wt is not None:
+            trk = self.TRACKS[track]
+            if self.track_state[track, 0] == 1.0:
                 reward -= 1.0
                 step_dec.append(dict(step=self.current_step, train=wt["id"],
-                    action=action, result="occupied",
+                    action=track, result="occupied",
                     desc=f"Track {trk['name']} occupied"))
             elif trk["cargo"] != wt["cargo"]:
                 reward -= 1.5
                 step_dec.append(dict(step=self.current_step, train=wt["id"],
-                    action=action, result="wrong_cargo",
+                    action=track, result="wrong_cargo",
                     desc=f"Wrong cargo: {self.CARGO_NAMES[wt['cargo']]} -> {trk['name']}"))
             else:
                 reward += 8.0
                 wt["status"] = self.EN_ROUTE_IN
-                wt["assigned_track"] = action
-                key = (wt["entry"], action)
-                tt = self.travel_times.get(key, 20)
+                wt["assigned_track"] = track
+                key = (wt["entry"], track)
+                tt_base = self.travel_times.get(key, 20)
+                tt = max(1, int(np.ceil(tt_base * rt_mult)))
                 rt = self.routes.get(key, [])
                 wt["travel_remaining"] = tt
                 wt["total_travel_in"] = tt
                 wt["route_in"] = list(rt)
-                wt["op_remaining"] = self.OP_TIMES[wt["cargo"]]
-                self.track_state[action] = [1.0, float(wt["cargo"] + 1),
+                op_base = self.OP_TIMES[wt["cargo"]]
+                wt["op_remaining"] = max(1, int(np.ceil(op_base * ld_mult)))
+                self.track_state[track] = [1.0, float(wt["cargo"] + 1),
                                             float(tt + wt["op_remaining"])]
                 step_dec.append(dict(step=self.current_step, train=wt["id"],
-                    action=action, result="assigned",
-                    desc=f"{self.CARGO_NAMES[wt['cargo']]} train -> {trk['name']}"))
-        elif action == self.NUM_TRACKS and wt is not None:
+                    action=track, result="assigned",
+                    desc=f"{self.CARGO_NAMES[wt['cargo']]} train -> {trk['name']} (rt×{rt_mult:.1f}, ld×{ld_mult:.1f})"))
+        elif track == self.NUM_TRACKS and wt is not None:
             # Waiting is ALWAYS the worst option when a free compatible track exists
             has_opt = any(self.TRACKS[j]["cargo"] == wt["cargo"]
                          and self.track_state[j, 0] == 0
@@ -289,7 +343,16 @@ class RailyardEnv(gym.Env):
                     en_route.append(t)
 
             elif t["status"] == self.OPERATING:
-                if self.np_random.random() < self.delay_prob * 0.15:
+                # apply fixed loading delay from scenario (once per train)
+                if not t.get("loading_delay_applied", True) and t.get("loading_delay", 0) > 0:
+                    extra = t["loading_delay"]
+                    t["op_remaining"] += extra
+                    t["delay"] += extra
+                    t["loading_delay_applied"] = True
+                    step_dec.append(dict(step=self.current_step, train=t["id"],
+                        action=t["assigned_track"], result="delay",
+                        desc=f"Injected delay +{extra} steps"))
+                elif self.delay_prob > 0 and self.np_random.random() < self.delay_prob * 0.15:
                     extra = int(self.np_random.integers(1, 4))
                     t["op_remaining"] += extra
                     t["delay"] += extra
@@ -377,7 +440,7 @@ class RailyardEnv(gym.Env):
         self.total_reward += reward
 
         all_done = all(t["status"] == self.COMPLETED for t in self.trains)
-        truncated = self.current_step >= self.MAX_STEPS
+        truncated = self.current_step >= self._episode_max_steps
         terminated = all_done
 
         if terminated:

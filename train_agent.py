@@ -1,9 +1,12 @@
 """
 DRL Agent Training Script
 =========================
-Trains a PPO agent on the RailyardEnv, logs per-episode metrics,
-runs a random-policy baseline for comparison, then evaluates the
-trained agent.  All artefacts are saved to  training_output/ .
+Trains a PPO agent on the RailyardEnv using the canonical 12-hour nominal
+schedule (from nominal_schedule.json) with varied delay vectors.
+
+Each episode uses the **same** schedule but a **different** delay vector,
+so the agent learns to recover from arrival + loading delays by reordering
+and reassigning trains.
 
 Usage:
     python train_agent.py
@@ -20,8 +23,48 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import BaseCallback
 
 from railyard_env import RailyardEnv, _episode_log
+from schedule_builder import (
+    load_schedule, schedule_to_env_format, build_delay_vectors,
+    TOTAL_STEPS, STEP_MINUTES,
+)
 
 OUTPUT_DIR = "training_output"
+
+
+# ---------- schedule-aware env wrapper ------------------------------------
+class ScheduleEnv(RailyardEnv):
+    """Wraps RailyardEnv to automatically inject the nominal schedule and a
+    rotating set of delay vectors on each reset.
+
+    * reset() cycles through pre-built delay vectors (with a small chance of
+      a no-delay episode so the agent also sees the nominal baseline).
+    * Every episode runs for TOTAL_STEPS (144 = 12 h at 5-min steps).
+    """
+
+    def __init__(self, schedule, delay_vectors, no_delay_prob=0.1, **kwargs):
+        num_trains = len(schedule)
+        super().__init__(num_trains=num_trains, delay_prob=0.0, **kwargs)
+        self._schedule = schedule
+        self._delay_vectors = delay_vectors
+        self._no_delay_prob = no_delay_prob
+        self._delay_idx = 0
+
+    def reset(self, seed=None, options=None):
+        # Pick delay vector: cycle through list, with occasional no-delay
+        rng = np.random.default_rng(seed)
+        if rng.random() < self._no_delay_prob:
+            delay_vec = [{"arrival_delay": 0, "loading_delay": 0}
+                         for _ in self._schedule]
+        else:
+            delay_vec = self._delay_vectors[self._delay_idx % len(self._delay_vectors)]
+            self._delay_idx += 1
+
+        opts = {
+            "schedule": self._schedule,
+            "delay_vector": delay_vec,
+            "max_steps": TOTAL_STEPS,
+        }
+        return super().reset(seed=seed, options=opts)
 
 
 # ---------- callback ---------------------------------------------------
@@ -80,16 +123,33 @@ def train():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     print("=" * 62)
-    print("   Railyard DRL Agent  --  Training Pipeline")
+    print("   Railyard DRL Agent  --  12h Schedule Training Pipeline")
     print("=" * 62)
+
+    # ---- Load canonical schedule and build delay scenarios ---------------
+    schedule_raw = load_schedule("nominal_schedule.json")
+    env_schedule = schedule_to_env_format(schedule_raw)
+    num_trains = len(env_schedule)
+    delay_vectors = build_delay_vectors(
+        n=500, num_trains=num_trains, seed=0, big_delay_prob=0.2,
+    )
+
+    print(f"\n  Schedule : {num_trains} trains, {TOTAL_STEPS} steps "
+          f"({TOTAL_STEPS * STEP_MINUTES // 60}h, 1 step = {STEP_MINUTES} min)")
+    print(f"  Delays   : {len(delay_vectors)} scenarios "
+          f"(big_delay_prob=0.2)")
 
     cfg = {
         "algorithm": "PPO",
-        "total_timesteps": 100_000,
-        "num_trains": 6,
-        "delay_prob": 0.2,
+        "total_timesteps": 200_000,
+        "num_trains": num_trains,
+        "total_steps": TOTAL_STEPS,
+        "step_minutes": STEP_MINUTES,
+        "delay_scenarios": len(delay_vectors),
+        "big_delay_prob": 0.2,
+        "no_delay_prob": 0.1,
         "learning_rate": 3e-4,
-        "n_steps": 1024,
+        "n_steps": 2048,
         "batch_size": 64,
         "n_epochs": 10,
         "gamma": 0.99,
@@ -103,8 +163,12 @@ def train():
     print("\n[1/3] Training PPO agent ...")
     _episode_log.clear()
 
-    env = Monitor(RailyardEnv(num_trains=cfg["num_trains"],
-                               delay_prob=cfg["delay_prob"]))
+    env = Monitor(ScheduleEnv(
+        schedule=env_schedule,
+        delay_vectors=delay_vectors,
+        no_delay_prob=cfg["no_delay_prob"],
+        log_episodes=True,
+    ))
     model = PPO(
         "MlpPolicy", env,
         learning_rate=cfg["learning_rate"],
@@ -138,8 +202,12 @@ def train():
     # ---- Phase 2: Random baseline ------------------------------------
     print("\n[2/3] Random-policy baseline (100 episodes) ...")
     _episode_log.clear()
-    baseline_env = RailyardEnv(num_trains=cfg["num_trains"],
-                                delay_prob=cfg["delay_prob"])
+    baseline_env = ScheduleEnv(
+        schedule=env_schedule,
+        delay_vectors=delay_vectors,
+        no_delay_prob=0.0,
+        log_episodes=True,
+    )
     _run_episodes(baseline_env, 100, model=None)
 
     if _episode_log:
@@ -151,8 +219,12 @@ def train():
     # ---- Phase 3: Evaluate trained agent -----------------------------
     print("\n[3/3] Evaluating trained agent (100 episodes) ...")
     _episode_log.clear()
-    eval_env = RailyardEnv(num_trains=cfg["num_trains"],
-                            delay_prob=cfg["delay_prob"])
+    eval_env = ScheduleEnv(
+        schedule=env_schedule,
+        delay_vectors=delay_vectors,
+        no_delay_prob=0.0,
+        log_episodes=True,
+    )
     _run_episodes(eval_env, 100, model=model, deterministic=False)
 
     if _episode_log:

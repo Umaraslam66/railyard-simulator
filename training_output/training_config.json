@@ -1,0 +1,17 @@
+{
+  "algorithm": "PPO",
+  "total_timesteps": 200000,
+  "num_trains": 8,
+  "total_steps": 144,
+  "step_minutes": 5,
+  "delay_scenarios": 500,
+  "big_delay_prob": 0.2,
+  "no_delay_prob": 0.1,
+  "learning_rate": 0.0003,
+  "n_steps": 2048,
+  "batch_size": 64,
+  "n_epochs": 10,
+  "gamma": 0.99,
+  "gae_lambda": 0.95,
+  "ent_coef": 0.02
+}

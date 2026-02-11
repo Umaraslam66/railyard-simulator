@@ -1,0 +1,110 @@
+{
+  "TOTAL_STEPS": 144,
+  "STEP_MINUTES": 5,
+  "schedule": [
+    {
+      "train_id": 0,
+      "cargo": 0,
+      "entry": 16,
+      "arrival": 0,
+      "slot_center": 59,
+      "track_idx": 0,
+      "start_at_track": 22,
+      "end_at_track": 37,
+      "travel_in_steps": 22,
+      "travel_out_steps": 22,
+      "op_steps": 15
+    },
+    {
+      "train_id": 1,
+      "cargo": 1,
+      "entry": 11,
+      "arrival": 10,
+      "slot_center": 62,
+      "track_idx": 3,
+      "start_at_track": 31,
+      "end_at_track": 41,
+      "travel_in_steps": 21,
+      "travel_out_steps": 21,
+      "op_steps": 10
+    },
+    {
+      "train_id": 2,
+      "cargo": 1,
+      "entry": 16,
+      "arrival": 20,
+      "slot_center": 74,
+      "track_idx": 2,
+      "start_at_track": 42,
+      "end_at_track": 52,
+      "travel_in_steps": 22,
+      "travel_out_steps": 22,
+      "op_steps": 10
+    },
+    {
+      "train_id": 3,
+      "cargo": 0,
+      "entry": 16,
+      "arrival": 30,
+      "slot_center": 89,
+      "track_idx": 0,
+      "start_at_track": 52,
+      "end_at_track": 67,
+      "travel_in_steps": 22,
+      "travel_out_steps": 22,
+      "op_steps": 15
+    },
+    {
+      "train_id": 4,
+      "cargo": 0,
+      "entry": 11,
+      "arrival": 40,
+      "slot_center": 97,
+      "track_idx": 1,
+      "start_at_track": 61,
+      "end_at_track": 76,
+      "travel_in_steps": 21,
+      "travel_out_steps": 21,
+      "op_steps": 15
+    },
+    {
+      "train_id": 5,
+      "cargo": 1,
+      "entry": 16,
+      "arrival": 50,
+      "slot_center": 104,
+      "track_idx": 2,
+      "start_at_track": 72,
+      "end_at_track": 82,
+      "travel_in_steps": 22,
+      "travel_out_steps": 22,
+      "op_steps": 10
+    },
+    {
+      "train_id": 6,
+      "cargo": 2,
+      "entry": 16,
+      "arrival": 60,
+      "slot_center": 108,
+      "track_idx": 5,
+      "start_at_track": 80,
+      "end_at_track": 88,
+      "travel_in_steps": 20,
+      "travel_out_steps": 20,
+      "op_steps": 8
+    },
+    {
+      "train_id": 7,
+      "cargo": 2,
+      "entry": 16,
+      "arrival": 70,
+      "slot_center": 120,
+      "track_idx": 6,
+      "start_at_track": 91,
+      "end_at_track": 99,
+      "travel_in_steps": 21,
+      "travel_out_steps": 21,
+      "op_steps": 8
+    }
+  ]
+}
